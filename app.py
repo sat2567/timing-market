@@ -121,6 +121,8 @@ def load_market_data():
                 st.sidebar.error(f"❌ Column '{date_col}' missing in {fname}")
                 data[key] = None
         else:
+            # If GSEC merged file is missing, try to merge parts on the fly? 
+            # (Skipping complex logic for now to keep script stable)
             st.sidebar.error(f"❌ Could not load {fname} (Check path or GitHub)")
             data[key] = None
             
@@ -157,13 +159,12 @@ def create_dashboard_data(raw_data):
         gsec = raw_data['gsec'][['Date', 'Close']].copy()
         # Ensure numeric
         gsec['Close'] = pd.to_numeric(gsec['Close'], errors='coerce')
-        # G-Sec Price to Yield approx (Simplistic: Yield moves inverse to price)
-        # Real Yield = Coupon / Price. Assuming 7% coupon bond at Par (100)
-        # We need Yield for ERP. If file has Price, we invert. 
-        # If file actually has Yield (check values ~7.0), use directly.
-        # Based on typical NSE data, "Clean Price" is ~90-110.
-        # Yield ~ Coupon / Price. Let's approx Yield = 7.5 + (100 - Price)/10
+        
+        # Convert Price to Yield Estimate
+        # If the file contains Prices (~80-110), we approximate yield.
+        # Approx: Yield = 7.2 + (100 - Price) * 0.08
         gsec['GSec_Yield'] = 7.2 + (100 - gsec['Close']) * 0.08 
+        
         gsec = gsec[['Date', 'GSec_Yield']]
         daily = pd.merge(daily, gsec, on='Date', how='left')
     else:
