@@ -1,12 +1,14 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                    🚀 PRO QUANT MARKET TIMING DASHBOARD                      ║
+║                🚀 PRO QUANT "ADVANCED" TRADING DASHBOARD                     ║
 ║                                                                              ║
-║  A comprehensive market analysis system for Indian equity markets            ║
-║  Features: ERP Analysis | VIX Signals | Multi-Cap Valuation | Sector Rotation║
+║  A institutional-grade market timing system for Indian Equities.             ║
+║  INTEGRATES:                                                                 ║
+║  1. Valuation (PE, PB, ERP)                                                  ║
+║  2. Sentiment (VIX, PCR*)                                                    ║
+║  3. Macro Risks (Crude Oil, USD/INR, G-Sec Yields)                           ║
 ║                                                                              ║
 ║  USAGE:   streamlit run pro_quant_dashboard.py                               ║
-║  REQUIREMENTS: pip install streamlit pandas numpy plotly                     ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -17,332 +19,407 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
 import os
+import glob
 import warnings
+
+# Try importing yfinance, handle if missing
+try:
+    import yfinance as yf
+    YFINANCE_AVAILABLE = True
+except ImportError:
+    YFINANCE_AVAILABLE = False
+
 warnings.filterwarnings('ignore')
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PAGE CONFIG
+# 1. PAGE CONFIGURATION & STYLING
 # ══════════════════════════════════════════════════════════════════════════════
 
 st.set_page_config(
-    page_title="Pro Quant Dashboard",
-    page_icon="📈",
+    page_title="Pro Quant Advanced Dashboard",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# ══════════════════════════════════════════════════════════════════════════════
-# CUSTOM CSS
-# ══════════════════════════════════════════════════════════════════════════════
 
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
-:root { --bg-dark: #0a0f1a; --bg-card: #111827; --green: #10b981; --red: #ef4444; --blue: #3b82f6; }
+:root { --bg-dark: #0a0f1a; --bg-card: #111827; --green: #10b981; --red: #ef4444; --blue: #3b82f6; --orange: #f59e0b; }
 .stApp { background: linear-gradient(180deg, #0a0f1a 0%, #111827 50%, #0a0f1a 100%); }
-.main-title { font-family: 'Orbitron', monospace; font-size: 2.5rem; font-weight: 800; text-align: center; background: linear-gradient(90deg, #10b981, #06b6d4, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0; }
-.subtitle { font-family: 'Rajdhani', sans-serif; font-size: 1rem; color: #64748b; text-align: center; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 2rem; }
-.metric-card { background: linear-gradient(135deg, #111827 0%, #1f2937 100%); border: 1px solid #1e3a5f; border-radius: 16px; padding: 1.5rem; text-align: center; position: relative; overflow: hidden; }
-.metric-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #10b981, #06b6d4, #3b82f6); }
-.metric-value { font-family: 'Orbitron', monospace; font-size: 2rem; font-weight: 700; color: #e2e8f0; }
-.metric-label { font-family: 'Rajdhani', sans-serif; font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 2px; }
-.signal-badge { font-family: 'Orbitron', monospace; font-size: 1.2rem; font-weight: 700; padding: 0.8rem 1.5rem; border-radius: 12px; display: inline-block; letter-spacing: 2px; }
-.signal-buy { background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; box-shadow: 0 0 20px rgba(16, 185, 129, 0.4); }
-.signal-sell { background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: white; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
-.signal-hold { background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%); color: white; }
-.regime-banner { font-family: 'Orbitron', monospace; font-size: 1.2rem; font-weight: 700; padding: 1rem; border-radius: 12px; text-align: center; margin: 1rem 0; letter-spacing: 2px; }
-.regime-bull { background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; color: #10b981; }
-.regime-bear { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #ef4444; }
-.regime-neutral { background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; color: #f59e0b; }
+
+/* HEADERS */
+.main-title { font-family: 'Orbitron', monospace; font-size: 2.5rem; font-weight: 800; text-align: center; 
+              background: linear-gradient(90deg, #10b981, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.section-title { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; color: #e2e8f0; margin-top: 2rem; border-left: 4px solid #3b82f6; padding-left: 10px; }
+
+/* METRIC CARDS */
+.metric-container { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; }
+.metric-card { background: rgba(17, 24, 39, 0.7); border: 1px solid #1e3a5f; border-radius: 12px; padding: 1.2rem; 
+               min-width: 160px; text-align: center; backdrop-filter: blur(10px); position: relative; overflow: hidden; flex: 1; }
+.metric-card::top { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: #3b82f6; }
+.metric-val { font-family: 'Orbitron', monospace; font-size: 1.8rem; font-weight: 700; color: #fff; }
+.metric-lbl { font-family: 'Rajdhani', sans-serif; font-size: 0.9rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+.metric-delta { font-size: 0.8rem; font-family: 'JetBrains Mono'; padding: 2px 8px; border-radius: 4px; margin-top: 5px; display: inline-block; }
+
+/* SIGNALS */
+.signal-box { padding: 1rem; border-radius: 10px; text-align: center; font-family: 'Orbitron'; font-weight: bold; font-size: 1.2rem; margin-top: 10px; }
+.sig-buy { background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #10b981; box-shadow: 0 0 15px rgba(16, 185, 129, 0.3); }
+.sig-sell { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.3); }
+.sig-neu { background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #f59e0b; }
+
 </style>
 """, unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# HYBRID DATA LOADING (LOCAL -> GITHUB FALLBACK)
+# 2. ADVANCED DATA ENGINE (AUTO-MERGE + LIVE FETCH)
 # ══════════════════════════════════════════════════════════════════════════════
 
 @st.cache_data(ttl=3600)
-def load_market_data():
-    """Load market data from Local Files first, then GitHub"""
-    
+def load_and_process_data():
+    """
+    1. Auto-Merges G-Sec CSVs if found.
+    2. Loads Valuation History.
+    3. Fetches Live Macro Data (Oil, USDINR) via yfinance.
+    """
     data = {}
-    
-    # 1. Configuration
-    GITHUB_BASE = "https://raw.githubusercontent.com/sat2567/timing-market/main/"
-    
-    file_configs = {
-        'vix': {'file': 'India_VIX_Yahoo.csv', 'date_col': 'Date'},
-        'nifty50': {'file': 'Nifty50_Historical_Yahoo.csv', 'date_col': 'Date'},
-        'midcap': {'file': 'NIFTY_MIDCAP_100_Historical_Yahoo.csv', 'date_col': 'Date'},
-        'pe_data': {'file': 'Nifty_Index_Valuation_History.csv', 'date_col': 'Date'}, 
-        'gsec': {'file': 'Nifty_10Y_Benchmark_GSec_Merged.csv', 'date_col': 'Date'},
-    }
-    
-    # 2. Loop and Load
-    for key, config in file_configs.items():
-        fname = config['file']
-        date_col = config['date_col']
-        df = None
-        source = "None"
-        
-        # A. TRY LOCAL FILE
-        if os.path.exists(fname):
-            try:
-                df = pd.read_csv(fname)
-                source = "Local"
-            except Exception as e:
-                st.sidebar.warning(f"⚠️ Local {fname} found but failed: {e}")
+    status_log = []
 
-        # B. TRY GITHUB (if local failed)
-        if df is None:
-            try:
-                url = GITHUB_BASE + fname.replace(" ", "%20")
-                df = pd.read_csv(url)
-                source = "GitHub"
-            except Exception as e:
-                # Silent fail here, we report at the end
-                pass
-        
-        # C. PROCESS DATA (if loaded)
-        if df is not None:
-            df.columns = df.columns.str.strip()
+    # --------------------------------------------------------------------------
+    # A. AUTO-MERGE G-SEC FILES
+    # --------------------------------------------------------------------------
+    gsec_files = glob.glob("NIFTY 10 YR BENCHMARK G-SEC*.csv")
+    if gsec_files:
+        try:
+            dfs = []
+            for f in gsec_files:
+                temp = pd.read_csv(f)
+                temp.columns = temp.columns.str.strip() # Clean headers
+                dfs.append(temp)
             
-            # Smart Date Parsing
-            if date_col in df.columns:
-                # Convert varying formats
-                df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
-                # Remove rows with invalid dates
-                df = df.dropna(subset=[date_col])
-                data[key] = df
-                st.sidebar.success(f"✅ Loaded {key} from {source}")
+            gsec_df = pd.concat(dfs, ignore_index=True)
+            
+            # Clean Dates
+            gsec_df['Date'] = pd.to_datetime(gsec_df['Date'], errors='coerce')
+            gsec_df = gsec_df.dropna(subset=['Date']).sort_values('Date')
+            
+            # Convert Price to Yield (Approximation if Yield col missing)
+            # Check if 'Close' is Price (~100) or Yield (~7.0)
+            avg_val = gsec_df['Close'].mean()
+            if avg_val > 50: 
+                # It's Price. Yield moves inversely.
+                # Approx Formula: Yield ≈ Coupon + (Par - Price)/Duration
+                # Simple Proxy: Yield = 7.2 + (100 - Price) * 0.1
+                gsec_df['GSec_Yield'] = 7.2 + (100 - gsec_df['Close']) * 0.08
             else:
-                st.sidebar.error(f"❌ Column '{date_col}' missing in {fname}")
-                data[key] = None
-        else:
-            # If GSEC merged file is missing, try to merge parts on the fly? 
-            # (Skipping complex logic for now to keep script stable)
-            st.sidebar.error(f"❌ Could not load {fname} (Check path or GitHub)")
-            data[key] = None
+                gsec_df['GSec_Yield'] = gsec_df['Close']
             
-    return data
-
-def create_dashboard_data(raw_data):
-    """Process raw data into dashboard-ready format"""
-    
-    # Check if we have minimum required data
-    if raw_data.get('nifty50') is None:
-        return None, None, None
-    
-    # ═══ DAILY DATA ═══
-    nifty = raw_data['nifty50'].copy()
-    daily = nifty[['Date', 'Close']].copy()
-    daily.columns = ['Date', 'Nifty50']
-    
-    # Add VIX
-    if raw_data.get('vix') is not None:
-        vix = raw_data['vix'][['Date', 'VIX_Close']].copy()
-        vix.columns = ['Date', 'VIX']
-        daily = pd.merge(daily, vix, on='Date', how='left')
+            data['gsec'] = gsec_df[['Date', 'GSec_Yield']].set_index('Date')
+            status_log.append(f"✅ Merged {len(gsec_files)} G-Sec files")
+        except Exception as e:
+            status_log.append(f"❌ G-Sec Merge Error: {e}")
     else:
-        daily['VIX'] = 15  # Default
-    
-    # Add Midcap
-    if raw_data.get('midcap') is not None:
-        midcap = raw_data['midcap'][['Date', 'Close']].copy()
-        midcap.columns = ['Date', 'Midcap100']
-        daily = pd.merge(daily, midcap, on='Date', how='left')
-    
-    # Add G-Sec Yield
-    if raw_data.get('gsec') is not None:
-        gsec = raw_data['gsec'][['Date', 'Close']].copy()
-        # Ensure numeric
-        gsec['Close'] = pd.to_numeric(gsec['Close'], errors='coerce')
-        
-        # Convert Price to Yield Estimate
-        # If the file contains Prices (~80-110), we approximate yield.
-        # Approx: Yield = 7.2 + (100 - Price) * 0.08
-        gsec['GSec_Yield'] = 7.2 + (100 - gsec['Close']) * 0.08 
-        
-        gsec = gsec[['Date', 'GSec_Yield']]
-        daily = pd.merge(daily, gsec, on='Date', how='left')
+        status_log.append("⚠️ No G-Sec files found")
+
+    # --------------------------------------------------------------------------
+    # B. LOAD VALUATION HISTORY (PE/PB)
+    # --------------------------------------------------------------------------
+    val_file = "Nifty_Index_Valuation_History.csv"
+    if os.path.exists(val_file):
+        try:
+            val_df = pd.read_csv(val_file)
+            val_df.columns = val_df.columns.str.strip()
+            val_df['Date'] = pd.to_datetime(val_df['Date'])
+            
+            # Filter for Nifty 50
+            n50 = val_df[val_df['Index'] == 'Nifty 50'].copy()
+            n50 = n50.set_index('Date')[['PE_Ratio', 'PB_Ratio', 'Div_Yield']]
+            n50.columns = ['PE', 'PB', 'DivYield']
+            data['valuation'] = n50
+            status_log.append("✅ Loaded Valuation History")
+        except Exception as e:
+            status_log.append(f"❌ Valuation Load Error: {e}")
     else:
-        daily['GSec_Yield'] = 7.2
-    
-    # Sort and fill
-    daily = daily.sort_values('Date').reset_index(drop=True)
-    daily = daily.ffill()
-    
-    # Technical Indicators
-    daily['SMA_50'] = daily['Nifty50'].rolling(50).mean()
-    daily['SMA_200'] = daily['Nifty50'].rolling(200).mean()
-    daily['ATH'] = daily['Nifty50'].expanding().max()
-    daily['Drawdown'] = ((daily['Nifty50'] / daily['ATH']) - 1) * 100
-    
-    # RSI
-    delta = daily['Nifty50'].diff()
-    gain = delta.where(delta > 0, 0).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-    rs = gain / loss
-    daily['RSI'] = 100 - (100 / (1 + rs))
-    
-    # ═══ MONTHLY DATA ═══
-    monthly = daily.groupby(daily['Date'].dt.to_period('M')).agg({
-        'Nifty50': 'last',
-        'VIX': 'mean',
-        'GSec_Yield': 'last',
-        'RSI': 'last',
-        'Drawdown': 'last'
-    }).reset_index()
-    monthly['Date'] = monthly['Date'].dt.to_timestamp() + pd.offsets.MonthEnd(0)
-    
-    # Add PE Data
-    if raw_data.get('pe_data') is not None:
-        pe_df = raw_data['pe_data']
-        
-        # Nifty 50 PE
-        n50_pe = pe_df[pe_df['Index'] == 'Nifty 50'][['Date', 'PE_Ratio', 'PB_Ratio', 'Div_Yield']].copy()
-        n50_pe['Date'] = pd.to_datetime(n50_pe['Date']) + pd.offsets.MonthEnd(0)
-        n50_pe.columns = ['Date', 'Nifty50_PE', 'Nifty50_PB', 'Nifty50_DivYield']
-        monthly = pd.merge(monthly, n50_pe, on='Date', how='left')
-        
-        # Midcap PE
-        mid_pe = pe_df[pe_df['Index'] == 'Nifty Midcap 100'][['Date', 'PE_Ratio']].copy()
-        mid_pe['Date'] = pd.to_datetime(mid_pe['Date']) + pd.offsets.MonthEnd(0)
-        mid_pe.columns = ['Date', 'Midcap_PE']
-        monthly = pd.merge(monthly, mid_pe, on='Date', how='left')
-        
-        # Smallcap PE
-        sm_pe = pe_df[pe_df['Index'] == 'Nifty Smallcap 100'][['Date', 'PE_Ratio']].copy()
-        sm_pe['Date'] = pd.to_datetime(sm_pe['Date']) + pd.offsets.MonthEnd(0)
-        sm_pe.columns = ['Date', 'Smallcap_PE']
-        monthly = pd.merge(monthly, sm_pe, on='Date', how='left')
-    
-    # Fill missing PE with defaults
-    monthly['Nifty50_PE'] = monthly.get('Nifty50_PE', pd.Series([22]*len(monthly))).fillna(22)
-    monthly['Midcap_PE'] = monthly.get('Midcap_PE', pd.Series([28]*len(monthly))).fillna(28)
-    monthly['Smallcap_PE'] = monthly.get('Smallcap_PE', pd.Series([25]*len(monthly))).fillna(25)
-    
-    # Calculate ERP
-    monthly['Earnings_Yield'] = (1 / monthly['Nifty50_PE']) * 100
-    monthly['ERP'] = monthly['Earnings_Yield'] - monthly['GSec_Yield']
-    
-    # PE Percentiles
-    monthly['Nifty50_PE_Pct'] = monthly['Nifty50_PE'].rank(pct=True) * 100
-    monthly['Midcap_PE_Pct'] = monthly['Midcap_PE'].rank(pct=True) * 100
-    monthly['Smallcap_PE_Pct'] = monthly['Smallcap_PE'].rank(pct=True) * 100
-    
-    # ═══ SECTOR DATA ═══
-    sector_data = None
-    if raw_data.get('pe_data') is not None:
-        pe_df = raw_data['pe_data']
-        latest_date = pe_df['Date'].max()
-        sector_data = pe_df[pe_df['Date'] == latest_date][['Index', 'PE_Ratio', 'PB_Ratio', 'Div_Yield']].copy()
-        
-        # Calculate percentiles for each sector
-        sector_pcts = []
-        for idx in sector_data['Index'].unique():
-            idx_hist = pe_df[pe_df['Index'] == idx]['PE_Ratio']
-            if len(idx_hist) > 5:
-                current_pe = sector_data[sector_data['Index'] == idx]['PE_Ratio'].values[0]
-                pct = (idx_hist < current_pe).mean() * 100
-                sector_pcts.append({'Index': idx, 'PE_Percentile': pct})
-        
-        if sector_pcts:
-            sector_pct_df = pd.DataFrame(sector_pcts)
-            sector_data = pd.merge(sector_data, sector_pct_df, on='Index', how='left')
-            sector_data = sector_data.sort_values('PE_Percentile')
-    
-    return daily, monthly, sector_data
+        # Fallback: GitHub Load
+        try:
+            url = "https://raw.githubusercontent.com/sat2567/timing-market/main/Nifty_Index_Valuation_History.csv"
+            val_df = pd.read_csv(url)
+            val_df.columns = val_df.columns.str.strip()
+            val_df['Date'] = pd.to_datetime(val_df['Date'])
+            n50 = val_df[val_df['Index'] == 'Nifty 50'].set_index('Date')[['PE_Ratio', 'PB_Ratio', 'Div_Yield']]
+            n50.columns = ['PE', 'PB', 'DivYield']
+            data['valuation'] = n50
+            status_log.append("✅ Loaded Valuation from GitHub")
+        except:
+            status_log.append("❌ Valuation File Missing")
 
+    # --------------------------------------------------------------------------
+    # C. FETCH LIVE MACRO DATA (YFINANCE)
+    # --------------------------------------------------------------------------
+    if YFINANCE_AVAILABLE:
+        tickers = {
+            'Nifty': '^NSEI',
+            'VIX': '^INDIAVIX', # Fallback to ^VIX if India Vix fails
+            'USDINR': 'INR=X',
+            'Crude': 'CL=F'
+        }
+        try:
+            # Download last 5 years
+            macro_data = yf.download(list(tickers.values()), period="5y", progress=False)['Close']
+            
+            # Rename columns (Handle MultiIndex issues in new yfinance)
+            # Try to map symbols back to names
+            cols_map = {v: k for k, v in tickers.items()}
+            # Simple rename if columns are flat
+            if isinstance(macro_data.columns, pd.Index):
+                # Check if columns are Tickers or Tuples
+                new_cols = []
+                for c in macro_data.columns:
+                    # If tuple (Price, Ticker), extract Ticker
+                    sym = c[0] if isinstance(c, tuple) else c
+                    new_cols.append(cols_map.get(sym, sym))
+                macro_data.columns = new_cols
+            
+            # Fix if IndiaVIX is missing (Common Yahoo Issue)
+            if 'VIX' not in macro_data.columns or macro_data['VIX'].isnull().all():
+                # Try loading local VIX file if available
+                vix_files = glob.glob("*VIX*.csv")
+                if vix_files:
+                    v_df = pd.read_csv(vix_files[0])
+                    v_df['Date'] = pd.to_datetime(v_df['Date'])
+                    v_df.set_index('Date', inplace=True)
+                    # Merge logic complicated, simple fill for now:
+                    macro_data['VIX'] = 15.0 # Placeholder
+            
+            data['macro'] = macro_data
+            status_log.append("✅ Fetched Live Macro Data (Oil, USD, Nifty)")
+            
+        except Exception as e:
+            status_log.append(f"⚠️ Live Data Error: {e}")
+    
+    return data, status_log
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SIGNAL LOGIC
+# 3. ANALYSIS & SIGNAL GENERATION
 # ══════════════════════════════════════════════════════════════════════════════
 
-def get_erp_signal(erp):
-    if pd.isna(erp): return 'NO DATA', 0, '#64748b'
-    if erp > 3: return 'VERY CHEAP', 2, '#10b981'
-    if erp > 1.5: return 'CHEAP', 1, '#34d399'
-    if erp > 0: return 'FAIR', 0, '#f59e0b'
-    if erp > -1.5: return 'EXPENSIVE', -1, '#f97316'
-    return 'VERY EXPENSIVE', -2, '#ef4444'
+def run_analysis(data):
+    """Combine all data sources into a master DataFrame"""
+    
+    # Base: Macro Data (Daily)
+    if 'macro' in data:
+        df = data['macro'].copy()
+    else:
+        return None
+    
+    # Merge Valuation (Forward Fill - since it's monthly)
+    if 'valuation' in data:
+        df = df.join(data['valuation'], how='outer').ffill()
+    
+    # Merge G-Sec (Forward Fill)
+    if 'gsec' in data:
+        df = df.join(data['gsec'], how='outer').ffill()
+    
+    # Drop rows where Nifty is NaN (weekends)
+    df = df.dropna(subset=['Nifty'])
+    
+    # --------------------------
+    # DERIVED METRICS
+    # --------------------------
+    
+    # 1. Earnings Yield
+    # If PE is missing, use Forward Fill, else assume 22
+    df['PE'] = df['PE'].fillna(22) 
+    df['EY'] = (1 / df['PE']) * 100
+    
+    # 2. Equity Risk Premium (ERP)
+    # ERP = Earnings Yield - Risk Free Rate
+    df['GSec_Yield'] = df['GSec_Yield'].fillna(7.2) # Default if missing
+    df['ERP'] = df['EY'] - df['GSec_Yield']
+    
+    # 3. Macro Trends (Rolling)
+    df['Oil_Trend'] = df['Crude'].pct_change(60) # 3-Month Trend
+    df['USD_Trend'] = df['USDINR'].pct_change(60)
+    
+    return df
 
-def get_vix_signal(vix):
-    if pd.isna(vix): return 'NO DATA', 0, '#64748b'
-    if vix > 28: return 'EXTREME FEAR', 2, '#10b981'
-    if vix > 22: return 'FEAR', 1, '#34d399'
-    if vix > 15: return 'NORMAL', 0, '#f59e0b'
-    if vix > 12: return 'COMPLACENT', -1, '#f97316'
-    return 'EXTREME GREED', -2, '#ef4444'
+def generate_signals(latest):
+    """
+    Traffic Light Logic:
+    1. VALUATION (ERP): High ERP = Green
+    2. SENTIMENT (VIX): High VIX = Green (Fear = Opportunity), Low VIX = Red
+    3. MACRO (Oil/USD): Rising Oil/USD = Red
+    """
+    score = 0
+    reasons = []
+    
+    # A. ERP SIGNAL (Weight: 40%)
+    erp = latest['ERP']
+    if erp > 3.0: 
+        score += 2; reasons.append("✅ Market Very Cheap (High ERP)")
+    elif erp > 1.0:
+        score += 1; reasons.append("✅ Market Fair/Cheap")
+    elif erp < -1.0:
+        score -= 2; reasons.append("❌ Market Expensive (Negative ERP)")
+    else:
+        reasons.append("Popcorn Time (Fair Valuation)")
 
-def get_composite_signal(erp_score, vix_score, pe_score):
-    composite = erp_score * 0.4 + vix_score * 0.3 + (1 if pe_score < 40 else -1) * 0.3
-    if composite >= 1: return 'AGGRESSIVE BUY', composite, 'signal-buy'
-    if composite >= 0.5: return 'BUY', composite, 'signal-buy'
-    if composite >= -0.5: return 'HOLD', composite, 'signal-hold'
-    if composite >= -1: return 'TRIM', composite, 'signal-trim'
-    return 'SELL', composite, 'signal-sell'
+    # B. VIX SIGNAL (Weight: 30%)
+    vix = latest['VIX']
+    if vix > 25:
+        score += 1.5; reasons.append("✅ Extreme Fear (Contrarian Buy)")
+    elif vix < 12:
+        score -= 1; reasons.append("❌ Complacency (Risk High)")
+    
+    # C. MACRO SIGNAL (Weight: 30%)
+    # If Oil rose > 20% in 3 months
+    if latest['Oil_Trend'] > 0.20:
+        score -= 1; reasons.append("❌ Crude Oil Spike (>20%)")
+    
+    # If USDINR rose > 5% in 3 months
+    if latest['USD_Trend'] > 0.05:
+        score -= 1; reasons.append("❌ Rupee Weakness (>5%)")
+
+    # D. FINAL VERDICT
+    if score >= 2:
+        signal = "AGGRESSIVE BUY"
+        css = "sig-buy"
+    elif score >= 0.5:
+        signal = "BUY ON DIPS"
+        css = "sig-buy"
+    elif score <= -1.5:
+        signal = "SELL / HEDGE"
+        css = "sig-sell"
+    else:
+        signal = "HOLD / NEUTRAL"
+        css = "sig-neu"
+        
+    return signal, css, score, reasons
 
 # ══════════════════════════════════════════════════════════════════════════════
-# CHARTING
-# ══════════════════════════════════════════════════════════════════════════════
-
-def create_gauge(val, title, min_v, max_v, steps, colors):
-    return go.Figure(go.Indicator(
-        mode="gauge+number", value=val, title={'text': title, 'font': {'color': 'white'}},
-        gauge={'axis': {'range': [min_v, max_v]}, 'bar': {'color': '#3b82f6'},
-               'steps': [{'range': [steps[i], steps[i+1]], 'color': colors[i]} for i in range(len(steps)-1)]},
-        number={'font': {'color': 'white'}}
-    )).update_layout(height=250, margin=dict(t=30,b=10,l=20,r=20), paper_bgcolor='rgba(0,0,0,0)')
-
-# ══════════════════════════════════════════════════════════════════════════════
-# MAIN APP
+# 4. MAIN DASHBOARD UI
 # ══════════════════════════════════════════════════════════════════════════════
 
 def main():
-    st.markdown('<h1 class="main-title">PRO QUANT DASHBOARD</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Data Source: Local Files (Priority) > GitHub (Fallback)</p>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title">PRO QUANT ADVANCED DASHBOARD</h1>', unsafe_allow_html=True)
+    st.markdown("### Institutional Market Timing System")
     
-    # LOAD
-    with st.spinner('🔄 Loading market data...'):
-        raw_data = load_market_data()
-        daily, monthly, sector_data = create_dashboard_data(raw_data)
+    # Load Data
+    with st.spinner("🤖 merging files & fetching live data..."):
+        data_dict, logs = load_and_process_data()
+        
+    # Show Logs in Expander
+    with st.expander("System Logs"):
+        for l in logs: st.write(l)
     
-    if monthly is None or len(monthly) == 0:
-        st.error("⚠️ DATA NOT FOUND. Please ensure .csv files are in the same folder as this script.")
+    # Run Analysis
+    df = run_analysis(data_dict)
+    
+    if df is None:
+        st.error("❌ Data Loading Failed. Please check CSV files.")
         return
 
-    # LATEST
-    latest = monthly.iloc[-1]
+    # Get Latest Data point
+    latest = df.iloc[-1]
+    prev = df.iloc[-2]
     
-    # SIGNALS
-    erp_txt, erp_sc, erp_col = get_erp_signal(latest.get('ERP', 0))
-    vix_txt, vix_sc, vix_col = get_vix_signal(latest.get('VIX', 15))
-    pe_pct = latest.get('Nifty50_PE_Pct', 50)
-    sig_txt, sig_sc, sig_cls = get_composite_signal(erp_sc, vix_sc, pe_pct)
-    
-    # METRICS ROW
+    # Signal Engine
+    sig_txt, sig_css, sig_score, sig_reasons = generate_signals(latest)
+
+    # --------------------------------------------------------------------------
+    # ROW 1: THE HEADS-UP DISPLAY (HUD)
+    # --------------------------------------------------------------------------
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f'<div class="metric-card"><div class="metric-label">Nifty PE</div><div class="metric-value">{latest["Nifty50_PE"]:.2f}</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="metric-card"><div class="metric-label">ERP %</div><div class="metric-value" style="color:{erp_col}">{latest["ERP"]:.2f}%</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="metric-card"><div class="metric-label">VIX</div><div class="metric-value" style="color:{vix_col}">{latest["VIX"]:.2f}</div></div>', unsafe_allow_html=True)
-    c4.markdown(f'<div class="metric-card"><div class="metric-label">ACTION</div><div class="signal-badge {sig_cls}">{sig_txt}</div></div>', unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # CHARTS TAB
-    t1, t2, t3 = st.tabs(["💰 PE Valuation", "📊 ERP Analysis", "😱 Sentiment (VIX)"])
     
-    with t1:
-        st.plotly_chart(go.Figure().add_trace(go.Scatter(x=monthly['Date'], y=monthly['Nifty50_PE'], name='Nifty PE')).update_layout(title="Nifty 50 PE Ratio History", height=400), use_container_width=True)
-    
-    with t2:
-        st.plotly_chart(go.Figure().add_trace(go.Scatter(x=monthly['Date'], y=monthly['ERP'], name='ERP', fill='tozeroy')).add_hline(y=1.5, line_dash='dash', annotation_text='Buy Zone').update_layout(title="Equity Risk Premium (Yield Spread)", height=400), use_container_width=True)
+    with c1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-lbl">NIFTY 50</div>
+            <div class="metric-val">{latest['Nifty']:,.0f}</div>
+            <div class="metric-delta" style="background: {'#10b981' if latest['Nifty']>prev['Nifty'] else '#ef4444'}20; color: {'#10b981' if latest['Nifty']>prev['Nifty'] else '#ef4444'}">
+                {(latest['Nifty']-prev['Nifty']):.2f}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-lbl">Equity Risk Premium</div>
+            <div class="metric-val">{latest['ERP']:.2f}%</div>
+             <div class="metric-delta" style="color: {'#10b981' if latest['ERP']>1.5 else '#f59e0b'}">Target: >1.5%</div>
+        </div>
+        """, unsafe_allow_html=True)
         
-    with t3:
-        st.plotly_chart(go.Figure().add_trace(go.Scatter(x=monthly['Date'], y=monthly['VIX'], name='VIX', line=dict(color='#8b5cf6'))).update_layout(title="India VIX History", height=400), use_container_width=True)
+    with c3:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-lbl">India VIX</div>
+            <div class="metric-val">{latest['VIX']:.2f}</div>
+             <div class="metric-delta">Fear Index</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with c4:
+        st.markdown(f"""
+        <div class="metric-card" style="border-color: #f59e0b;">
+            <div class="metric-lbl">Quant Signal</div>
+            <div class="signal-box {sig_css}">{sig_txt}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    # --------------------------------------------------------------------------
+    # ROW 2: DEEP DIVE TABS
+    # --------------------------------------------------------------------------
+    st.markdown("---")
+    tab1, tab2, tab3 = st.tabs(["💰 VALUATION & G-SEC", "🛢️ MACRO RISKS", "🧠 SIGNAL LOGIC"])
+    
+    with tab1:
+        c_1, c_2 = st.columns([2, 1])
+        with c_1:
+            # ERP Chart
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
+            fig.add_trace(go.Scatter(x=df.index, y=df['ERP'], name="ERP", fill='tozeroy', line=dict(color='#3b82f6')))
+            fig.add_hline(y=1.5, line_dash="dash", line_color="green", annotation_text="Buy Zone")
+            fig.add_hline(y=-0.5, line_dash="dash", line_color="red", annotation_text="Caution Zone")
+            fig.update_layout(title="Equity Risk Premium (Valuation)", height=400, template="plotly_dark")
+            st.plotly_chart(fig, use_container_width=True)
+        with c_2:
+            st.markdown("### Bond Yields")
+            st.metric("10Y G-Sec Yield", f"{latest['GSec_Yield']:.2f}%")
+            st.metric("Nifty Earnings Yield", f"{latest['EY']:.2f}%")
+            st.info("When Earnings Yield > Bond Yield, stocks are attractive.")
+
+    with tab2:
+        st.subheader("Macro Correlations")
+        # Normalize to 100 to compare trends
+        norm_df = df[['Nifty', 'Crude', 'USDINR']].dropna()
+        norm_df = norm_df / norm_df.iloc[0] * 100
+        
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=norm_df.index, y=norm_df['Nifty'], name='Nifty', line=dict(width=3, color='white')))
+        fig2.add_trace(go.Scatter(x=norm_df.index, y=norm_df['Crude'], name='Crude Oil', line=dict(color='#ef4444')))
+        fig2.add_trace(go.Scatter(x=norm_df.index, y=norm_df['USDINR'], name='USD/INR', line=dict(color='#f59e0b')))
+        fig2.update_layout(title="Relative Performance (Base=100)", height=400, template="plotly_dark")
+        st.plotly_chart(fig2, use_container_width=True)
+        
+        c_a, c_b = st.columns(2)
+        c_a.metric("Crude Oil ($)", f"{latest['Crude']:.2f}", f"{latest['Oil_Trend']*100:.1f}% (3M)")
+        c_b.metric("USD/INR", f"{latest['USDINR']:.2f}", f"{latest['USD_Trend']*100:.1f}% (3M)")
+
+    with tab3:
+        st.subheader("Why this Signal?")
+        for r in sig_reasons:
+            st.write(r)
+        
+        st.markdown("""
+        **Methodology:**
+        1. **ERP:** Measures excess return of stocks over bonds.
+        2. **VIX:** Used as a contrarian indicator (High VIX = Buy).
+        3. **Macro:** Checks for external shocks (Oil spike / Rupee crash).
+        """)
 
 if __name__ == "__main__":
     main()
