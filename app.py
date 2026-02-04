@@ -335,32 +335,60 @@ st.markdown("""
 # ══════════════════════════════════════════════════════════════════════════════
 
 @st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600)
 def load_market_data():
-    """Load all market data from CSV files"""
+    """Load market data directly from GitHub Repository"""
     
     data = {}
     
-    # File configurations
+    # 1. Define the Base "Raw" URL
+    # We convert 'github.com' -> 'raw.githubusercontent.com' and remove '/blob/'
+    BASE_URL = "https://raw.githubusercontent.com/sat2567/timing-market/main/"
+    
+    # 2. Define File Names (Must match exactly what is in your Repo)
     file_configs = {
         'vix': {'file': 'India_VIX_Yahoo.csv', 'date_col': 'Date'},
         'nifty50': {'file': 'Nifty50_Historical_Yahoo.csv', 'date_col': 'Date'},
         'midcap': {'file': 'NIFTY_MIDCAP_100_Historical_Yahoo.csv', 'date_col': 'Date'},
-        'pe_data': {'file': 'Nifty_Index_Valuation_History.csv', 'date_col': 'Date'},
+        'pe_data': {'file': 'Nifty_Index_Valuation_History.csv', 'date_col': 'Date'}, 
         'gsec': {'file': 'Nifty_10Y_Benchmark_GSec_Merged.csv', 'date_col': 'Date'},
     }
     
+    # 3. Loop and Load
     for key, config in file_configs.items():
+        url = BASE_URL + config['file']
+        
         try:
-            df = pd.read_csv(config['file'])
-            df[config['date_col']] = pd.to_datetime(df[config['date_col']])
-            data[key] = df
-        except FileNotFoundError:
-            data[key] = None
-        except Exception as e:
-            data[key] = None
-    
-    return data
+            # Read directly from URL
+            df = pd.read_csv(url)
+            
+            # Clean column names
+            df.columns = df.columns.str.strip()
+            
+            # Smart Date Parsing
+            if config['date_col'] in df.columns:
+                # Try standard formats first
+                for fmt in ['%Y-%m-%d', '%d-%b-%Y', '%d-%m-%Y']:
+                    try:
+                        df[config['date_col']] = pd.to_datetime(df[config['date_col']], format=fmt)
+                        break
+                    except:
+                        continue
+                
+                # Fallback
+                if df[config['date_col']].dtype == 'object':
+                     df[config['date_col']] = pd.to_datetime(df[config['date_col']], errors='coerce')
 
+                data[key] = df
+            else:
+                st.sidebar.warning(f"⚠️ Column '{config['date_col']}' missing in {config['file']}")
+                data[key] = None
+                
+        except Exception as e:
+            st.sidebar.error(f"❌ Failed to fetch {config['file']} from GitHub.\nError: {str(e)}")
+            data[key] = None
+            
+    return data
 
 def create_dashboard_data(raw_data):
     """Process raw data into dashboard-ready format"""
