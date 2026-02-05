@@ -52,7 +52,7 @@ def load_and_process_data():
         'Domestic_Nifty_Price': 'Nifty50_Historical_Yahoo.csv',
         'Domestic_Midcap_Price': 'NIFTY_MIDCAP_100_Historical_Yahoo.csv',
         'Domestic_VIX': 'India_VIX_Yahoo.csv',
-        'Domestic_Bond': 'India 10-Year Bond Yield Historical Data.csv',
+        'Domestic_Bond': 'Nifty_10Y_Benchmark_GSec_Merged.csv',
         'Val_Nifty': 'Nifty50_PE_PB_Div_Merged.csv',
         'Val_Midcap': 'NiftyMidcap100_PE_PB_Div_Merged.csv',
         'Val_Smallcap': 'NiftySmallcap250_PE_PB_Div_Merged.csv'
